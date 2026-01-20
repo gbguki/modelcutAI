@@ -133,6 +133,21 @@ async function uploadGenerationResult(
 // ============================================
 
 /**
+ * Firestore에 저장할 수 없는 속성들 제거 (file, undefined 등)
+ */
+function cleanImageFile(imageFile: ImageFile | null | undefined): Omit<ImageFile, 'file'> | null {
+  if (!imageFile) return null;
+  
+  return {
+    id: imageFile.id || undefined,
+    url: imageFile.url,
+    name: imageFile.name || undefined,
+    mimeType: imageFile.mimeType || undefined,
+    // file, base64는 의도적으로 제외
+  };
+}
+
+/**
  * 프로젝트 저장 (이미지는 ImgBB, 메타데이터는 Firestore)
  */
 export async function saveProject(
@@ -144,17 +159,19 @@ export async function saveProject(
     
     // 1. 베이스 이미지 업로드
     onProgress?.('베이스 이미지 업로드 중...');
-    let uploadedBaseImage: ImageFile | null = null;
+    let uploadedBaseImage: Omit<ImageFile, 'file'> | null = null;
     if (project.baseImage) {
-      uploadedBaseImage = await uploadImageFile(project.baseImage, 'base');
+      const uploaded = await uploadImageFile(project.baseImage, 'base');
+      uploadedBaseImage = cleanImageFile(uploaded);
     }
     
     // 2. 제품 이미지들 업로드
     onProgress?.('제품 이미지 업로드 중...');
-    const uploadedProductImages: ImageFile[] = [];
+    const uploadedProductImages: Omit<ImageFile, 'file'>[] = [];
     for (let i = 0; i < project.productImages.length; i++) {
       const uploaded = await uploadImageFile(project.productImages[i], `product_${i}`);
-      uploadedProductImages.push(uploaded);
+      const cleaned = cleanImageFile(uploaded);
+      if (cleaned) uploadedProductImages.push(cleaned);
     }
     
     // 3. 히스토리 이미지들 업로드
