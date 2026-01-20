@@ -82,23 +82,28 @@ async function uploadImageFile(
 ): Promise<ImageFile> {
   // 이미 외부 URL인 경우 (ImgBB URL 등) 그대로 반환
   if (!imageFile.base64 && imageFile.url && !imageFile.url.startsWith('data:')) {
-    return imageFile;
+    // file 속성 제거 (Firestore에 저장 불가)
+    const { file, ...rest } = imageFile as any;
+    return rest;
   }
 
   // base64 데이터가 있으면 업로드
   const dataToUpload = imageFile.base64 || imageFile.url;
   if (!dataToUpload) {
-    return imageFile;
+    const { file, ...rest } = imageFile as any;
+    return rest;
   }
 
   const fileName = `${prefix}_${Date.now()}`;
   const downloadUrl = await uploadImageToImgBB(dataToUpload, fileName);
 
-  // base64 제거하고 URL로 대체
+  // base64와 file 제거하고 URL로 대체
   return {
-    ...imageFile,
+    id: imageFile.id,
     url: downloadUrl,
-    base64: undefined, // ImgBB URL 사용하므로 base64 제거
+    name: imageFile.name,
+    mimeType: imageFile.mimeType,
+    // base64, file은 제외 (ImgBB URL 사용)
   };
 }
 
