@@ -133,18 +133,10 @@ async function uploadGenerationResult(
 // ============================================
 
 /**
- * Firestore에 저장할 수 없는 속성들 제거 (file, undefined 등)
+ * JSON 직렬화로 File 객체 등 저장 불가능한 데이터 완전 제거
  */
-function cleanImageFile(imageFile: ImageFile | null | undefined): Omit<ImageFile, 'file'> | null {
-  if (!imageFile) return null;
-  
-  return {
-    id: imageFile.id || undefined,
-    url: imageFile.url,
-    name: imageFile.name || undefined,
-    mimeType: imageFile.mimeType || undefined,
-    // file, base64는 의도적으로 제외
-  };
+function sanitizeForFirestore<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
 }
 
 /**
@@ -159,27 +151,26 @@ export async function saveProject(
     
     // 1. 베이스 이미지 업로드
     onProgress?.('베이스 이미지 업로드 중...');
-    let uploadedBaseImage: Omit<ImageFile, 'file'> | null = null;
+    let uploadedBaseImage = null;
     if (project.baseImage) {
       const uploaded = await uploadImageFile(project.baseImage, 'base');
-      uploadedBaseImage = cleanImageFile(uploaded);
+      uploadedBaseImage = sanitizeForFirestore(uploaded);
     }
     
     // 2. 제품 이미지들 업로드
     onProgress?.('제품 이미지 업로드 중...');
-    const uploadedProductImages: Omit<ImageFile, 'file'>[] = [];
+    const uploadedProductImages = [];
     for (let i = 0; i < project.productImages.length; i++) {
       const uploaded = await uploadImageFile(project.productImages[i], `product_${i}`);
-      const cleaned = cleanImageFile(uploaded);
-      if (cleaned) uploadedProductImages.push(cleaned);
+      uploadedProductImages.push(sanitizeForFirestore(uploaded));
     }
     
     // 3. 히스토리 이미지들 업로드
-    const uploadedHistory: GenerationResult[] = [];
+    const uploadedHistory = [];
     for (let i = 0; i < project.history.length; i++) {
       onProgress?.(`생성 결과 업로드 중... (${i + 1}/${project.history.length})`);
       const uploaded = await uploadGenerationResult(project.history[i], i);
-      uploadedHistory.push(uploaded);
+      uploadedHistory.push(sanitizeForFirestore(uploaded));
     }
     
     // 4. Firestore에 메타데이터 저장
